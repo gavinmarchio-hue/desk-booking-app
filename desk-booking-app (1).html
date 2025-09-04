@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Office Desk Booking</title>
+    <!-- Tailwind CSS via CDN (no build step) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React + ReactDOM UMD builds -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Babel to transpile JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body class="min-h-screen bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      function DeskBookingApp() {
+        const [currentUser, setCurrentUser] = useState('Gavin Marchio');
+        const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+        const [activeView, setActiveView] = useState('calendar');
+        const [currentWeek, setCurrentWeek] = useState(0); // 0 = this week, 1 = next week, etc.
+
+        // Sample employees
+        const employees = [
+          'John Smith','Sarah Johnson','Mike Davis','Emma Wilson','Chris Brown',
+          'Lisa Garcia','David Lee','Anna Martinez','Ryan Taylor','Jessica White',
+          'Kevin Anderson','Michelle Thomas','Brian Jackson','Amy Rodriguez','Daniel Moore',
+          'Jennifer Lopez','Mark Thompson','Rachel Green','Steven Clark','Laura Hall',
+          'Peter Parker','Mary Jane','Tony Stark','Natasha Romanoff','Bruce Banner'
+        ];
+
+        const TOTAL_DESKS = 18;
+
+        // Function to get next weekdays only, with week offset
+        const getNextWeekdays = (count = 5, weekOffset = 0) => {
+          const days = [];
+          const today = new Date();
+          let daysAdded = 0;
+          let currentDay = weekOffset * 7; // Start from the specified week
+          while (daysAdded < count) {
+            const date = new Date(today);
+            date.setDate(today.getDate() + currentDay);
+            const dayOfWeek = date.getDay();
+            // Only add weekdays (Monday = 1, Friday = 5)
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+              days.push(date.toISOString().split('T')[0]);
+              daysAdded++;
+            }
+            currentDay++;
+          }
+          return days;
+        };
+
+        // Function to get week date range for display
+        const getWeekRange = (weekOffset) => {
+          const weekdays = getNextWeekdays(5, weekOffset);
+          if (weekdays.length === 0) return '';
+          const startDate = new Date(weekdays[0] + 'T00:00:00');
+          const endDate = new Date(weekdays[weekdays.length - 1] + 'T00:00:00');
+          return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        };
+
+        // Initialize bookings with some sample data - weekdays only
+        const [bookings, setBookings] = useState(() => {
+          const initialBookings = {};
+          const weekdays = getNextWeekdays(50); // Get next 50 weekdays for multiple weeks
+          weekdays.forEach((dateStr) => {
+            // Random number of bookings between 5-17
+            const numBookings = Math.floor(Math.random() * 13) + 5;
+            const shuffled = [...employees].sort(() => 0.5 - Math.random());
+            initialBookings[dateStr] = shuffled.slice(0, numBookings);
+          });
+          return initialBookings;
+        });
+
+        const getBookingsForDate = (date) => {
+          return bookings[date] || [];
+        };
+
+        const isUserBooked = (date, user) => getBookingsForDate(date).includes(user);
+
+        const getAvailableDesks = (date) => TOTAL_DESKS - getBookingsForDate(date).length;
+
+        const bookDesk = (date, user) => {
+          if (getAvailableDesks(date) > 0 && !isUserBooked(date, user)) {
+            setBookings((prev) => ({
+              ...prev,
+              [date]: [...(prev[date] || []), user]
+            }));
+          }
+        };
+
+        const cancelBooking = (date, user) => {
+          setBookings((prev) => ({
+            ...prev,
+            [date]: (prev[date] || []).filter((bookedUser) => bookedUser !== user)
+          }));
+        };
+
+        const getCapacityColor = (available, total) => {
+          const percentage = available / total;
+          if (percentage > 0.5) return 'text-green-600 bg-green-50 border-green-200';
+          if (percentage > 0.2) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+          return 'text-red-600 bg-red-50 border-red-200';
+        };
+
+        const getCapacityBadgeColor = (available, total) => {
+          const percentage = available / total;
+          if (percentage > 0.5) return 'bg-green-500';
+          if (percentage > 0.2) return 'bg-yellow-500';
+          return 'bg-red-500';
+        };
+
+        const formatDate = (dateStr) => {
+          const date = new Date(dateStr + 'T00:00:00');
+          return date.toLocaleDateString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric'
+          });
+        };
+
+        const getUserBookings = (user) => {
+          const userBookings = [];
+          const weekdays = getNextWeekdays(50); // Check next 50 weekdays
+          weekdays.forEach((dateStr) => {
+            if (isUserBooked(dateStr, user)) userBookings.push(dateStr);
+          });
+          return userBookings.sort();
+        };
+
+        const WeekNavigator = () => (
+          <div className="flex items-center justify-between bg-gray-100 p-4 rounded-lg mb-6">
+            <button
+              onClick={() => setCurrentWeek(Math.max(0, currentWeek - 1))}
+              disabled={currentWeek === 0}
+              className={`flex items-center px-4 py-2 rounded-lg ${
+                currentWeek === 0
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
+              }`}
+            >
+              <span className="mr-1">‹</span>
+              Previous Week
+            </button>
+
+            <div className="text-center">
+              <div className="font-semibold text-lg">
+                {currentWeek === 0 ? 'This Week' : currentWeek === 1 ? 'Next Week' : `Week ${currentWeek + 1}`}
+              </div>
+              <div className="text-sm text-gray-600">{getWeekRange(currentWeek)}</div>
+            </div>
+
+            <button
+              onClick={() => setCurrentWeek(currentWeek + 1)}
+              disabled={currentWeek >= 8}
+              className={`flex items-center px-4 py-2 rounded-lg ${
+                currentWeek >= 8
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 shadow-sm'
+              }`}
+            >
+              Next Week
+              <span className="ml-1">›</span>
+            </button>
+          </div>
+        );
+
+        const CalendarView = () => {
+          const weekdays = getNextWeekdays(5, currentWeek);
+          return (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Book a Desk</h2>
+                <div className="text-sm text-gray-500">Logged in as: <span className="font-medium">{currentUser}</span></div>
+              </div>
+
+              <WeekNavigator />
+
+              <div className="space-y-3">
+                {weekdays.map((date) => {
+                  const available = getAvailableDesks(date);
+                  const booked = getBookingsForDate(date).length;
+                  const userHasBooking = isUserBooked(date, currentUser);
+                  return (
+                    <div key={date} className={`p-4 rounded-lg border-2 ${getCapacityColor(available, TOTAL_DESKS)}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-semibold text-lg">{formatDate(date)}</div>
+                          <div className="text-sm">{booked}/{TOTAL_DESKS} desks booked • {available} available</div>
+                          {userHasBooking && (
+                            <div className="text-sm font-medium text-blue-600 mt-1">✓ You have a desk booked</div>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3">
+                          <div className={`w-3 h-3 rounded-full ${getCapacityBadgeColor(available, TOTAL_DESKS)}`}></div>
+                          {userHasBooking ? (
+                            <button
+                              onClick={() => cancelBooking(date, currentUser)}
+                              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          ) : available > 0 ? (
+                            <button
+                              onClick={() => bookDesk(date, currentUser)}
+                              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            >
+                              Book Desk
+                            </button>
+                          ) : (
+                            <div className="px-4 py-2 bg-gray-300 text-gray-500 rounded-lg">Fully Booked</div>
+                          )}
+                          <button
+                            onClick={() => { setSelectedDate(date); setActiveView('daily'); }}
+                            className="px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg text-sm transition-colors"
+                            title="View who's coming in"
+                          >
+                            View ({booked})
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        };
+
+        const MyBookingsView = () => {
+          const myBookings = getUserBookings(currentUser);
+          return (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">My Bookings</h2>
+              {myBookings.length === 0 ? (
+                <div className="text-center py-12 text-gray-500">
+                  <div className="mx-auto h-12 w-12 text-gray-300 mb-4">🗓️</div>
+                  <p>No upcoming bookings</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myBookings.map((date) => (
+                    <div key={date} className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold">{formatDate(date)}</div>
+                          <div className="text-sm text-gray-600">Desk reserved • {getBookingsForDate(date).length}/{TOTAL_DESKS} total bookings</div>
+                        </div>
+                        <button
+                          onClick={() => cancelBooking(date, currentUser)}
+                          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        };
+
+        const DashboardView = () => {
+          const weekDays = getNextWeekdays(5, currentWeek);
+          return (
+            <div className="space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Weekly Overview</h2>
+              <WeekNavigator />
+
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                {weekDays.map((date) => {
+                  const booked = getBookingsForDate(date).length;
+                  const available = TOTAL_DESKS - booked;
+                  const percentage = Math.round((booked / TOTAL_DESKS) * 100);
+                  return (
+                    <div key={date} className="bg-white p-4 rounded-lg border shadow-sm">
+                      <div className="text-sm font-medium text-gray-500 mb-2">{formatDate(date)}</div>
+                      <div className="text-2xl font-bold mb-2">{percentage}%</div>
+                      <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-300 ${
+                            percentage > 80 ? 'bg-red-500' : percentage > 60 ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                      <div className="text-sm text-gray-600">{booked}/{TOTAL_DESKS} desks booked</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="bg-white p-6 rounded-lg border shadow-sm">
+                <h3 className="text-lg font-semibold mb-4">Weekly Statistics</h3>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600">
+                      {weekDays.length > 0 ? Math.round(weekDays.reduce((sum, date) => sum + getBookingsForDate(date).length, 0) / weekDays.length) : 0}
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">Avg Daily Bookings</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-600">
+                      {weekDays.length > 0 ? Math.max(...weekDays.map((date) => getBookingsForDate(date).length)) : 0}
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">Peak Day Bookings</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-600">
+                      {weekDays.length > 0 ? Math.round((weekDays.reduce((sum, date) => sum + getBookingsForDate(date).length, 0) / (weekDays.length * TOTAL_DESKS)) * 100) : 0}%
+                    </div>
+                    <div className="text-sm text-gray-600 mt-1">Avg Occupancy</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
+        const DailyView = () => {
+          const dayBookings = getBookingsForDate(selectedDate);
+          return (
+            <div className="space-y-6">
+              <div className="flex items-center space-x-4">
+                <button onClick={() => setActiveView('calendar')} className="text-blue-600 hover:text-blue-800 font-medium">← Back to Calendar</button>
+                <h2 className="text-2xl font-bold text-gray-900">{formatDate(selectedDate)}</h2>
+              </div>
+
+              <div className="bg-white p-6 rounded-lg border shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Office Occupancy</h3>
+                  <div className="text-sm text-gray-500">{dayBookings.length}/{TOTAL_DESKS} desks booked</div>
+                </div>
+
+                <div className="w-full bg-gray-200 rounded-full h-3 mb-6">
+                  <div
+                    className={`h-3 rounded-full transition-all duration-300 ${
+                      dayBookings.length > 14 ? 'bg-red-500' : dayBookings.length > 10 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${(dayBookings.length / TOTAL_DESKS) * 100}%` }}
+                  />
+                </div>
+
+                {dayBookings.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No bookings for this day</p>
+                ) : (
+                  <div>
+                    <h4 className="font-medium mb-3">Who's Coming In ({dayBookings.length}):</h4>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {dayBookings.sort().map((employee, index) => (
+                        <div key={index} className="flex items-center space-x-2 p-2 bg-blue-50 rounded border border-blue-100">
+                          <span className="text-blue-600">👤</span>
+                          <span className="text-sm">{employee}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div className="min-h-screen bg-gray-50">
+            <div className="max-w-6xl mx-auto px-4 py-8">
+              {/* Header */}
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Office Desk Booking</h1>
+                <p className="text-gray-600">Manage your weekday workspace reservations • {TOTAL_DESKS} desks available</p>
+              </div>
+
+              {/* Navigation Tabs */}
+              <div className="mb-6">
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg max-w-md">
+                  <button
+                    onClick={() => setActiveView('calendar')}
+                    className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeView === 'calendar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    📅 Book Desk
+                  </button>
+                  <button
+                    onClick={() => setActiveView('bookings')}
+                    className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeView === 'bookings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    👤 My Bookings
+                  </button>
+                  <button
+                    onClick={() => setActiveView('dashboard')}
+                    className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeView === 'dashboard' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    📊 Dashboard
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Content */}
+              <div className="bg-white rounded-lg shadow-sm border p-6">
+                {activeView === 'calendar' && <CalendarView />}
+                {activeView === 'bookings' && <MyBookingsView />}
+                {activeView === 'dashboard' && <DashboardView />}
+                {activeView === 'daily' && <DailyView />}
+              </div>
+
+              {/* User Selector */}
+              <div className="mt-6 text-center text-sm text-gray-500">
+                <div className="flex items-center justify-center space-x-4">
+                  <select
+                    value={currentUser}
+                    onChange={(e) => setCurrentUser(e.target.value)}
+                    className="px-3 py-1 border rounded text-sm"
+                  >
+                    {employees.map((employee) => (
+                      <option key={employee} value={employee}>{employee}</option>
+                    ))}
+                  </select>
+                  <span>Switch user to test different views</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<DeskBookingApp />);
+    </script>
+  </body>
+</html>
